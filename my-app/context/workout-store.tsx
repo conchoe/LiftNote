@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AppState } from "react-native";
 
 import { generateId } from "@/lib/id";
@@ -57,8 +57,11 @@ function buildInitialDraft(
 
 export function WorkoutStoreProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppStateV1 | null>(null);
+  const stateRef = useRef<AppStateV1 | null>(null);
   const [ready, setReady] = useState(false);
   const [showSaveBanner, setShowSaveBanner] = useState(false);
+
+  stateRef.current = state;
 
   useEffect(() => {
     let cancelled = false;
@@ -85,10 +88,21 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!ready || !state) return;
     const t = setTimeout(() => {
-      savePersistedState(state).catch(() => {
-        Alert.alert("Storage error", "Could not save your data. Please try again.");
-      });
-    }, 250);
+      const attempt = () => {
+        const latest = stateRef.current;
+        if (!latest) return Promise.resolve();
+        return savePersistedState(latest);
+      };
+      attempt()
+        .catch(() => new Promise((r) => setTimeout(r, 250)).then(attempt))
+        .catch((err) => {
+          console.error("AsyncStorage save error:", err);
+          Alert.alert(
+            "Storage error",
+            "Could not save your data after retrying. If you are on web, disable private browsing or clear site data and try again."
+          );
+        });
+    }, 450);
     return () => clearTimeout(t);
   }, [state, ready]);
 

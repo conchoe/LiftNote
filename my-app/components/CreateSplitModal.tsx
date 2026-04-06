@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
   },
-  addExBtnText: { color: "#052e16", fontWeight: "700" },
+  addExBtnText: { color: colors.onAccent, fontWeight: "700" },
   pickerBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
@@ -348,6 +348,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
   },
-  pickerDoneText: { color: "#052e16", fontWeight: "700", fontSize: 16 },
+  pickerDoneText: { color: colors.onAccent, fontWeight: "700", fontSize: 16 },
   emptyLib: { color: colors.textMuted, paddingVertical: 12 },
 });

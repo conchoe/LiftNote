@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CreateSplitModal } from "@/components/CreateSplitModal";
 import { ExerciseLogModal } from "@/components/ExerciseLogModal";
@@ -159,7 +160,7 @@ export default function LogWorkoutScreen() {
           {renderLibrary()}
 
           <TouchableOpacity style={styles.createSplitBtn} onPress={() => setCreateOpen(true)}>
-            <Ionicons name="add-circle-outline" size={22} color="#052e16" />
+            <Ionicons name="add-circle-outline" size={22} color={colors.onAccent} />
             <Text style={styles.createSplitBtnText}>Create new split</Text>
           </TouchableOpacity>
 
@@ -223,100 +224,96 @@ export default function LogWorkoutScreen() {
     );
   }
 
-  if (state.activeWorkoutSlotIndex === null) {
-    return (
-      <View style={styles.screen}>
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <View style={styles.splitTop}>
-            <View>
-              <Text style={styles.screenTitle}>{activeSplit.name}</Text>
-              <Text style={styles.screenSub}>Choose today&apos;s workout from your split.</Text>
-            </View>
-            <TouchableOpacity style={styles.exitChip} onPress={exitSplit}>
-              <Text style={styles.exitChipText}>Exit split</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.dayGrid}>
-            {activeSplit.slots.map((slot, index) => {
-              if (!slot) {
-                return (
-                  <View key={index} style={[styles.dayBox, styles.dayBoxRest]}>
-                    <Text style={styles.dayBoxTitle}>Day {index + 1}</Text>
-                    <Text style={styles.dayBoxRestText}>Rest</Text>
-                  </View>
-                );
-              }
-              return (
-                <TouchableOpacity key={index} style={styles.dayBox} onPress={() => selectWorkoutSlot(index)}>
-                  <Text style={styles.dayBoxTitle}>Day {index + 1}</Text>
-                  <Text style={styles.dayBoxWorkout}>{slot.workoutName}</Text>
-                  <Text style={styles.dayBoxMeta}>{slot.exerciseIds.length} exercises</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </ScrollView>
-      </View>
-    );
-  }
+  const splitHeader = (subtitle: string) => (
+    <View style={styles.headerBlock}>
+      <Text style={styles.screenTitle}>{activeSplit.name}</Text>
+      <Text style={styles.screenSub}>{subtitle}</Text>
+      <TouchableOpacity
+        style={styles.exitRow}
+        onPress={exitSplit}
+        accessibilityRole="button"
+        accessibilityLabel="Exit split"
+        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+      >
+        <Ionicons name="log-out-outline" size={20} color={colors.text} />
+        <Text style={styles.exitRowText}>Exit split</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <View style={styles.screen}>
       <WorkoutSavedBanner visible={showSaveBanner} onDismiss={dismissSaveBanner} />
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.splitTop}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.screenTitle}>{activeSplit.name}</Text>
-            <Text style={styles.screenSub}>
-              {activeSlot?.workoutName} · Day {state.activeWorkoutSlotIndex! + 1}
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.exitChip} onPress={exitSplit}>
-            <Text style={styles.exitChipText}>Exit split</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity style={styles.backDay} onPress={clearWorkoutSlotSelection}>
-          <Ionicons name="chevron-back" size={18} color={colors.accent} />
-          <Text style={styles.backDayText}>Change workout day</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.sectionLabel}>Exercises</Text>
-        <View style={styles.exerciseGrid}>
-          {activeSlot?.exerciseIds.map((exerciseId) => {
-            const ex = state.exercises.find((e) => e.id === exerciseId);
-            const rows = state.draftByExerciseId[exerciseId] ?? [];
-            const filled = rows.filter((r) => r.reps.trim() && r.weight.trim() && r.rpe.trim()).length;
-            return (
-              <TouchableOpacity key={exerciseId} style={styles.exerciseBox} onPress={() => openLogModal(exerciseId)}>
-                <Text style={styles.exerciseBoxTitle}>{ex?.name ?? "Exercise"}</Text>
-                <Text style={styles.exerciseBoxMeta}>
-                  {filled}/{rows.length} sets ready
-                </Text>
+      <SafeAreaView style={styles.safeMain} edges={["top"]}>
+        {state.activeWorkoutSlotIndex === null ? (
+          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            {splitHeader("Choose today’s workout from your split.")}
+            <View style={styles.dayGrid}>
+              {activeSplit.slots.map((slot, index) => {
+                if (!slot) {
+                  return (
+                    <View key={index} style={[styles.dayBox, styles.dayBoxRest]}>
+                      <Text style={styles.dayBoxTitle}>Day {index + 1}</Text>
+                      <Text style={styles.dayBoxRestText}>Rest</Text>
+                    </View>
+                  );
+                }
+                return (
+                  <TouchableOpacity key={index} style={styles.dayBox} onPress={() => selectWorkoutSlot(index)}>
+                    <Text style={styles.dayBoxTitle}>Day {index + 1}</Text>
+                    <Text style={styles.dayBoxWorkout}>{slot.workoutName}</Text>
+                    <Text style={styles.dayBoxMeta}>{slot.exerciseIds.length} exercises</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
+        ) : (
+          <View style={styles.slotScreen}>
+            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+              {splitHeader(
+                `${activeSlot?.workoutName ?? "Workout"} · Day ${state.activeWorkoutSlotIndex + 1}`
+              )}
+              <TouchableOpacity style={styles.backDay} onPress={clearWorkoutSlotSelection}>
+                <Ionicons name="chevron-back" size={18} color={colors.accent} />
+                <Text style={styles.backDayText}>Change workout day</Text>
               </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <TouchableOpacity style={styles.saveWorkoutBtn} onPress={handleSaveWorkout}>
-          <Ionicons name="checkmark-done" size={22} color="#052e16" />
-          <Text style={styles.saveWorkoutBtnText}>Save workout</Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      <ExerciseLogModal
-        visible={logExerciseId !== null}
-        title={logExercise?.name ?? "Exercise"}
-        sets={logDraftSets}
-        onClose={() => setLogExerciseId(null)}
-        onChangeSet={(index, field, value) => {
-          if (!logExerciseId) return;
-          updateDraftSet(logExerciseId, index, { [field]: value });
-        }}
-        onAddSet={() => logExerciseId && addDraftSet(logExerciseId)}
-        onRemoveSet={(index) => logExerciseId && removeDraftSet(logExerciseId, index)}
-      />
+              <Text style={styles.sectionLabel}>Exercises</Text>
+              <View style={styles.exerciseGrid}>
+                {activeSlot?.exerciseIds.map((exerciseId) => {
+                  const ex = state.exercises.find((e) => e.id === exerciseId);
+                  const rows = state.draftByExerciseId[exerciseId] ?? [];
+                  const filled = rows.filter((r) => r.reps.trim() && r.weight.trim() && r.rpe.trim()).length;
+                  return (
+                    <TouchableOpacity key={exerciseId} style={styles.exerciseBox} onPress={() => openLogModal(exerciseId)}>
+                      <Text style={styles.exerciseBoxTitle}>{ex?.name ?? "Exercise"}</Text>
+                      <Text style={styles.exerciseBoxMeta}>
+                        {filled}/{rows.length} sets ready
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TouchableOpacity style={styles.saveWorkoutBtn} onPress={handleSaveWorkout}>
+                <Ionicons name="checkmark-done" size={22} color={colors.onAccent} />
+                <Text style={styles.saveWorkoutBtnText}>Save workout</Text>
+              </TouchableOpacity>
+            </ScrollView>
+            <ExerciseLogModal
+              visible={logExerciseId !== null}
+              title={logExercise?.name ?? "Exercise"}
+              sets={logDraftSets}
+              onClose={() => setLogExerciseId(null)}
+              onChangeSet={(index, field, value) => {
+                if (!logExerciseId) return;
+                updateDraftSet(logExerciseId, index, { [field]: value });
+              }}
+              onAddSet={() => logExerciseId && addDraftSet(logExerciseId)}
+              onRemoveSet={(index) => logExerciseId && removeDraftSet(logExerciseId, index)}
+            />
+          </View>
+        )}
+      </SafeAreaView>
     </View>
   );
 }
@@ -325,6 +322,12 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  safeMain: {
+    flex: 1,
+  },
+  slotScreen: {
+    flex: 1,
   },
   centered: {
     flex: 1,
@@ -410,7 +413,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   primaryBtnText: {
-    color: "#052e16",
+    color: colors.onAccent,
     fontWeight: "700",
     fontSize: 16,
   },
@@ -451,7 +454,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   smallBtnText: {
-    color: "#052e16",
+    color: colors.onAccent,
     fontWeight: "700",
   },
   smallGhost: {
@@ -473,7 +476,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   createSplitBtnText: {
-    color: "#052e16",
+    color: colors.onAccent,
     fontSize: 17,
     fontWeight: "800",
   },
@@ -513,24 +516,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  splitTop: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 12,
+  headerBlock: {
+    marginBottom: 8,
   },
-  exitChip: {
+  exitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 10,
+    marginTop: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    minHeight: 48,
     backgroundColor: colors.surface2,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  exitChipText: {
+  exitRowText: {
     color: colors.text,
-    fontWeight: "600",
-    fontSize: 13,
+    fontWeight: "700",
+    fontSize: 15,
   },
   dayGrid: {
     gap: 10,
@@ -618,7 +624,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   saveWorkoutBtnText: {
-    color: "#052e16",
+    color: colors.onAccent,
     fontSize: 17,
     fontWeight: "800",
   },

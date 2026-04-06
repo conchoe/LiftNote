@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
+import { Animated, Modal, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { colors } from "@/lib/theme";
@@ -33,24 +33,24 @@ export function WorkoutSavedBanner({
     return () => clearTimeout(t);
   }, [visible, opacity, scale, onDismiss]);
 
-  if (!visible) return null;
-
   return (
-    <View style={styles.overlay} pointerEvents="none">
-      <Animated.View style={[styles.card, { opacity, transform: [{ scale }] }]}>
-        <Ionicons name="checkmark-circle" size={40} color={colors.accent} />
-        <Text style={styles.text}>Workout logged!</Text>
-      </Animated.View>
-    </View>
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
+      <View style={styles.overlay} pointerEvents="box-none">
+        <Animated.View style={[styles.card, { opacity, transform: [{ scale }] }]}>
+          <Ionicons name="checkmark-circle" size={40} color={colors.accent} />
+          <Text style={styles.text}>Workout logged!</Text>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 50,
   },
   card: {
     flexDirection: "row",
