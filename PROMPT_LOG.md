@@ -17,4 +17,4 @@ Format your review as a numbered list of findings, each marked as [PASS], [FAIL]
 Be specific. Reference file names and line numbers. 
 Export the review as REVIEW.md at the root of the project.
 
-3.Okay Now I want to fix some of the UI/UX. right now the Exit split button is almost off of the screen and I can't pres it. Make it so that the button is more on the screen and pressable, also change the color scheme so that all the green buttons are a chrome/whiteish color. Additionally everytime i log a workout and i save a workout, the Workout Saved animation doesn't play until i exit out and click back onto that workout. Make it so that it plays right as I store it. 
+3. Okay Now I want to fix some of the UI/UX. right now the Exit split button is almost off of the screen and I can't pres it. Make it so that the button is more on the screen and pressable, also change the color scheme so that all the green buttons are a chrome/whiteish color. Additionally everytime i log a workout and i save a workout, the Workout Saved animation doesn't play until i exit out and click back onto that workout. Make it so that it plays right as I store it. 

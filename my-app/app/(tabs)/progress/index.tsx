@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { WeeklyBarChart } from "@/components/WeeklyBarChart";
 import { useWorkoutStore } from "@/context/workout-store";
 import { colors } from "@/lib/theme";
+import type { WorkoutSession } from "@/lib/types";
 
 export default function ProgressScreen() {
   const router = useRouter();
@@ -25,6 +26,15 @@ export default function ProgressScreen() {
     if (!q) return state.exercises;
     return state.exercises.filter((e) => e.name.toLowerCase().includes(q));
   }, [state.exercises, query]);
+
+  const recentWorkouts = useMemo(() => {
+    return [...state.sessions].sort((a, b) => b.completedAt.localeCompare(a.completedAt)).slice(0, 8);
+  }, [state.sessions]);
+
+  const formatSessionSummary = (s: WorkoutSession) => {
+    const vol = s.sets.reduce((acc, x) => acc + x.reps * x.weight, 0);
+    return `${s.sets.length} sets · ${Math.round(vol)} lb volume`;
+  };
 
   if (!ready) {
     return (
@@ -56,7 +66,30 @@ export default function ProgressScreen() {
         </View>
       )}
 
-      <Text style={styles.sectionTitle}>Exercise library</Text>
+      {hasHistory ? (
+        <>
+          <Text style={styles.sectionTitle}>Recent workouts</Text>
+          <Text style={styles.sectionSub}>Open a session to see every set, or delete a mistaken log.</Text>
+          {recentWorkouts.map((s) => (
+            <TouchableOpacity
+              key={s.id}
+              style={styles.row}
+              onPress={() => router.push(`/progress/workout/${s.id}`)}
+            >
+              <View style={styles.recentMain}>
+                <Text style={styles.recentTitle}>{s.workoutNameSnapshot}</Text>
+                <Text style={styles.recentMeta}>
+                  {s.localDate} · {s.splitNameSnapshot}
+                </Text>
+                <Text style={styles.recentSummary}>{formatSessionSummary(s)}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          ))}
+        </>
+      ) : null}
+
+      <Text style={[styles.sectionTitle, hasHistory && styles.sectionSpaced]}>Exercise library</Text>
       <Text style={styles.sectionSub}>Search and open any movement to see every set you have logged.</Text>
       <View style={styles.searchRow}>
         <Ionicons name="search" size={20} color={colors.textMuted} />
@@ -198,5 +231,27 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     paddingVertical: 8,
+  },
+  sectionSpaced: {
+    marginTop: 8,
+  },
+  recentMain: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  recentTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  recentMeta: {
+    color: colors.textMuted,
+    fontSize: 13,
+    marginBottom: 2,
+  },
+  recentSummary: {
+    color: colors.textMuted,
+    fontSize: 12,
   },
 });

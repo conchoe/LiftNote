@@ -5,6 +5,7 @@ import { generateId } from "@/lib/id";
 import { getLocalDateString } from "@/lib/date";
 import { createDefaultState, loadPersistedState, savePersistedState } from "@/lib/persistence";
 import { applyStreakDecayToState } from "@/lib/streak-sync";
+import { rebuildLastWeightsFromSessions, rebuildStreakFromSessions } from "@/lib/session-derive";
 import { computeStreakAfterWorkout, streakDisplayValue } from "@/lib/streak";
 import type { AppStateV1, DraftSet, Exercise, WorkoutSession, WorkoutSlot } from "@/lib/types";
 import { validateSetRow } from "@/lib/validation";
@@ -27,6 +28,7 @@ type WorkoutStoreValue = {
   saveWorkout: () => { ok: true } | { ok: false; error: string };
   dismissSaveBanner: () => void;
   showSaveBanner: boolean;
+  deleteSession: (sessionId: string) => void;
 };
 
 const Ctx = createContext<WorkoutStoreValue | null>(null);
@@ -370,6 +372,18 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
 
   const dismissSaveBanner = useCallback(() => setShowSaveBanner(false), []);
 
+  const deleteSession = useCallback(
+    (sessionId: string) => {
+      setAndDecay((s) => {
+        const sessions = s.sessions.filter((x) => x.id !== sessionId);
+        const { streak, lastWorkoutDate } = rebuildStreakFromSessions(sessions);
+        const lastWeightByExerciseId = rebuildLastWeightsFromSessions(sessions);
+        return { ...s, sessions, streak, lastWorkoutDate, lastWeightByExerciseId };
+      });
+    },
+    [setAndDecay]
+  );
+
   const value = useMemo<WorkoutStoreValue>(() => {
     const fallback = createDefaultState();
     return {
@@ -390,6 +404,7 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
       saveWorkout,
       dismissSaveBanner,
       showSaveBanner,
+      deleteSession,
     };
   }, [
     ready,
@@ -409,6 +424,7 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
     saveWorkout,
     dismissSaveBanner,
     showSaveBanner,
+    deleteSession,
   ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

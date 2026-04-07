@@ -2,7 +2,9 @@ import { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 
+import { ExerciseVolumeChart } from "@/components/ExerciseVolumeChart";
 import { useWorkoutStore } from "@/context/workout-store";
+import { volumeSeriesForExercise } from "@/lib/exercise-volume";
 import { colors } from "@/lib/theme";
 
 type Row = {
@@ -21,6 +23,11 @@ export default function ExerciseHistoryScreen() {
 
   const exercise = state.exercises.find((e) => e.id === id);
   const title = exercise?.name ?? "Exercise";
+
+  const volumePoints = useMemo(() => {
+    if (!id) return [];
+    return volumeSeriesForExercise(state.sessions, id);
+  }, [state.sessions, id]);
 
   const rows = useMemo(() => {
     const out: Row[] = [];
@@ -49,6 +56,7 @@ export default function ExerciseHistoryScreen() {
     <ScrollView contentContainerStyle={styles.body}>
       <Text style={styles.headline}>{title}</Text>
       <Text style={styles.sub}>Logged names are preserved even if you rename the exercise later.</Text>
+      <ExerciseVolumeChart points={volumePoints} title="Volume over time" />
       {rows.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>No sets logged for this exercise yet.</Text>

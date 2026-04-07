@@ -14,6 +14,7 @@ export default function ProgressLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: "Progress & history" }} />
+      <Stack.Screen name="workout/[sessionId]" options={{ title: "Workout" }} />
       <Stack.Screen name="exercise/[id]" options={{ title: "Exercise history" }} />
     </Stack>
   );
