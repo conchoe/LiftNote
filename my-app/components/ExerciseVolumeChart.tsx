@@ -13,15 +13,15 @@ export function ExerciseVolumeChart({ points, title }: { points: VolumePoint[]; 
     return (
       <View style={styles.wrap}>
         <Text style={styles.chartTitle}>{title}</Text>
-        <Text style={styles.empty}>Log this exercise in at least one workout to see volume.</Text>
+        <Text style={styles.empty}>Log this exercise to see per-set volume.</Text>
       </View>
     );
   }
 
   const bars = points.map((p) => {
-    const h = Math.max(6, (p.volume / max) * CHART_H);
+    const h = Math.max(4, (p.volume / max) * CHART_H);
     return (
-      <View key={p.sessionId} style={styles.barCol}>
+      <View key={p.key} style={styles.barCol}>
         <View style={styles.barTrack}>
           <View style={[styles.barFill, { height: h }]} />
         </View>
@@ -36,8 +36,8 @@ export function ExerciseVolumeChart({ points, title }: { points: VolumePoint[]; 
   return (
     <View style={styles.wrap}>
       <Text style={styles.chartTitle}>{title}</Text>
-      <Text style={styles.unit}>Total lbs moved per session (reps × weight)</Text>
-      {points.length > 6 ? (
+      <Text style={styles.unit}>Each bar is one set (reps × weight). Numbers are set order oldest → newest.</Text>
+      {points.length > 5 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
           {bars}
         </ScrollView>
@@ -67,6 +67,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     marginBottom: 12,
+    lineHeight: 18,
   },
   empty: {
     color: colors.textMuted,
@@ -77,12 +78,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "flex-start",
-    gap: 6,
+    gap: 5,
     flexWrap: "wrap",
+    paddingRight: 8,
   },
   barCol: {
     alignItems: "center",
-    width: 52,
+    width: 44,
     marginBottom: 4,
   },
   barTrack: {
@@ -101,13 +103,14 @@ const styles = StyleSheet.create({
   },
   volText: {
     color: colors.text,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "700",
     marginTop: 4,
   },
   barLabel: {
     color: colors.textMuted,
-    fontSize: 9,
+    fontSize: 10,
+    fontWeight: "600",
     marginTop: 2,
     textAlign: "center",
     width: "100%",

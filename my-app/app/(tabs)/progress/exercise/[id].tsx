@@ -4,7 +4,7 @@ import { useLocalSearchParams } from "expo-router";
 
 import { ExerciseVolumeChart } from "@/components/ExerciseVolumeChart";
 import { useWorkoutStore } from "@/context/workout-store";
-import { volumeSeriesForExercise } from "@/lib/exercise-volume";
+import { volumeSeriesPerSetForExercise } from "@/lib/exercise-volume";
 import { colors } from "@/lib/theme";
 
 type Row = {
@@ -26,7 +26,7 @@ export default function ExerciseHistoryScreen() {
 
   const volumePoints = useMemo(() => {
     if (!id) return [];
-    return volumeSeriesForExercise(state.sessions, id);
+    return volumeSeriesPerSetForExercise(state.sessions, id);
   }, [state.sessions, id]);
 
   const rows = useMemo(() => {
@@ -56,7 +56,7 @@ export default function ExerciseHistoryScreen() {
     <ScrollView contentContainerStyle={styles.body}>
       <Text style={styles.headline}>{title}</Text>
       <Text style={styles.sub}>Logged names are preserved even if you rename the exercise later.</Text>
-      <ExerciseVolumeChart points={volumePoints} title="Volume over time" />
+      <ExerciseVolumeChart points={volumePoints} title="Volume per set" />
       {rows.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>No sets logged for this exercise yet.</Text>

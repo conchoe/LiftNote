@@ -17,6 +17,7 @@ type WorkoutStoreValue = {
   addExercise: (name: string) => string | null;
   updateExerciseName: (id: string, name: string) => void;
   createSplit: (name: string, slots: WorkoutSlot[]) => string | null;
+  replaceSplitTemplate: (splitId: string, name: string, slots: WorkoutSlot[]) => boolean;
   updateSplitName: (splitId: string, name: string) => void;
   enterSplit: (splitId: string) => void;
   exitSplit: () => void;
@@ -37,6 +38,25 @@ function ensureSevenSlots(slots: WorkoutSlot[]): WorkoutSlot[] {
   const copy = [...slots];
   while (copy.length < 7) copy.push(null);
   return copy.slice(0, 7);
+}
+
+function validateWorkoutSlots(
+  slotsInput: WorkoutSlot[]
+): { ok: true; slots: WorkoutSlot[] } | { ok: false; message: string } {
+  const slots = ensureSevenSlots(slotsInput);
+  const used = slots.filter(Boolean) as NonNullable<WorkoutSlot>[];
+  if (used.length === 0) {
+    return { ok: false, message: "Add at least one workout day to your split." };
+  }
+  for (const slot of used) {
+    if (!slot.workoutName.trim()) {
+      return { ok: false, message: "Each workout needs a name." };
+    }
+    if (slot.exerciseIds.length === 0) {
+      return { ok: false, message: "Each workout needs at least one exercise." };
+    }
+  }
+  return { ok: true, slots };
 }
 
 function buildInitialDraft(
@@ -165,28 +185,57 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
         Alert.alert("Invalid split", "Split name cannot be empty.");
         return null;
       }
-      const slots = ensureSevenSlots(slotsInput);
-      const used = slots.filter(Boolean) as NonNullable<WorkoutSlot>[];
-      if (used.length === 0) {
-        Alert.alert("Invalid split", "Add at least one workout day to your split.");
+      const v = validateWorkoutSlots(slotsInput);
+      if (!v.ok) {
+        Alert.alert("Invalid split", v.message);
         return null;
-      }
-      for (const slot of used) {
-        if (!slot.workoutName.trim()) {
-          Alert.alert("Invalid split", "Each workout needs a name.");
-          return null;
-        }
-        if (slot.exerciseIds.length === 0) {
-          Alert.alert("Invalid split", "Each workout needs at least one exercise.");
-          return null;
-        }
       }
       const id = generateId();
       setAndDecay((s) => ({
         ...s,
-        splits: [...s.splits, { id, name: trimmedName, slots }],
+        splits: [...s.splits, { id, name: trimmedName, slots: v.slots }],
       }));
       return id;
+    },
+    [setAndDecay]
+  );
+
+  const replaceSplitTemplate = useCallback(
+    (splitId: string, name: string, slotsInput: WorkoutSlot[]) => {
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        Alert.alert("Invalid split", "Split name cannot be empty.");
+        return false;
+      }
+      const v = validateWorkoutSlots(slotsInput);
+      if (!v.ok) {
+        Alert.alert("Invalid split", v.message);
+        return false;
+      }
+      setAndDecay((s) => {
+        if (!s.splits.some((sp) => sp.id === splitId)) return s;
+        const nextSplits = s.splits.map((sp) =>
+          sp.id === splitId ? { ...sp, name: trimmedName, slots: v.slots } : sp
+        );
+        let activeWorkoutSlotIndex = s.activeWorkoutSlotIndex;
+        let draftByExerciseId = s.draftByExerciseId;
+        if (s.activeSplitId === splitId && s.activeWorkoutSlotIndex !== null) {
+          const slot = v.slots[s.activeWorkoutSlotIndex];
+          if (!slot) {
+            activeWorkoutSlotIndex = null;
+            draftByExerciseId = {};
+          } else {
+            draftByExerciseId = buildInitialDraft(slot.exerciseIds, s.lastWeightByExerciseId);
+          }
+        }
+        return {
+          ...s,
+          splits: nextSplits,
+          activeWorkoutSlotIndex,
+          draftByExerciseId,
+        };
+      });
+      return true;
     },
     [setAndDecay]
   );
@@ -393,6 +442,7 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
       addExercise,
       updateExerciseName,
       createSplit,
+      replaceSplitTemplate,
       updateSplitName,
       enterSplit,
       exitSplit,
@@ -413,6 +463,7 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
     addExercise,
     updateExerciseName,
     createSplit,
+    replaceSplitTemplate,
     updateSplitName,
     enterSplit,
     exitSplit,

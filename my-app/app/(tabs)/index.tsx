@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CreateSplitModal } from "@/components/CreateSplitModal";
+import { EditSplitModal } from "@/components/EditSplitModal";
 import { ExerciseLogModal } from "@/components/ExerciseLogModal";
 import { WorkoutSavedBanner } from "@/components/WorkoutSavedBanner";
 import { useWorkoutStore } from "@/context/workout-store";
@@ -25,6 +26,7 @@ export default function LogWorkoutScreen() {
     addExercise,
     updateExerciseName,
     createSplit,
+    replaceSplitTemplate,
     updateSplitName,
     enterSplit,
     exitSplit,
@@ -45,6 +47,7 @@ export default function LogWorkoutScreen() {
   const [renameExerciseId, setRenameExerciseId] = useState<string | null>(null);
   const [renameExerciseText, setRenameExerciseText] = useState("");
   const [logExerciseId, setLogExerciseId] = useState<string | null>(null);
+  const [editSplitOpen, setEditSplitOpen] = useState(false);
 
   const activeSplit = useMemo(
     () => state.splits.find((s) => s.id === state.activeSplitId) ?? null,
@@ -238,6 +241,10 @@ export default function LogWorkoutScreen() {
         <Ionicons name="log-out-outline" size={20} color={colors.text} />
         <Text style={styles.exitRowText}>Exit split</Text>
       </TouchableOpacity>
+      <TouchableOpacity style={styles.editSplitBtn} onPress={() => setEditSplitOpen(true)} accessibilityRole="button">
+        <Ionicons name="create-outline" size={18} color={colors.onAccent} />
+        <Text style={styles.editSplitBtnText}>Edit split layout</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -314,6 +321,14 @@ export default function LogWorkoutScreen() {
           </View>
         )}
       </SafeAreaView>
+      <EditSplitModal
+        visible={editSplitOpen}
+        onClose={() => setEditSplitOpen(false)}
+        split={activeSplit}
+        exercises={state.exercises}
+        onAddExercise={(name) => addExercise(name)}
+        onSave={(splitId, name, slots) => replaceSplitTemplate(splitId, name, slots)}
+      />
     </View>
   );
 }
@@ -537,6 +552,24 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: "700",
     fontSize: 15,
+  },
+  editSplitBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  editSplitBtnText: {
+    color: colors.onAccent,
+    fontWeight: "700",
+    fontSize: 14,
   },
   dayGrid: {
     gap: 10,
