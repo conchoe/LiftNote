@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,16 +10,22 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CreateSplitModal } from "@/components/CreateSplitModal";
+import { useAuth } from "@/context/auth-context";
 import { EditSplitModal } from "@/components/EditSplitModal";
 import { ExerciseLogModal } from "@/components/ExerciseLogModal";
 import { WorkoutSavedBanner } from "@/components/WorkoutSavedBanner";
 import { useWorkoutStore } from "@/context/workout-store";
+import { publishSplitToMarketplace } from "@/lib/publish-split";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import type { Split } from "@/lib/types";
 import { colors } from "@/lib/theme";
 
 export default function LogWorkoutScreen() {
+  const { session } = useAuth();
   const {
     ready,
     state,
@@ -48,6 +54,7 @@ export default function LogWorkoutScreen() {
   const [renameExerciseText, setRenameExerciseText] = useState("");
   const [logExerciseId, setLogExerciseId] = useState<string | null>(null);
   const [editSplitOpen, setEditSplitOpen] = useState(false);
+  const [publishingSplitId, setPublishingSplitId] = useState<string | null>(null);
 
   const activeSplit = useMemo(
     () => state.splits.find((s) => s.id === state.activeSplitId) ?? null,
@@ -61,6 +68,48 @@ export default function LogWorkoutScreen() {
 
   const logExercise = logExerciseId ? state.exercises.find((e) => e.id === logExerciseId) : undefined;
   const logDraftSets = logExerciseId ? state.draftByExerciseId[logExerciseId] ?? [] : [];
+
+  const handlePublishSplit = useCallback(
+    async (sp: Split) => {
+      if (!isSupabaseConfigured() || !supabase) {
+        Alert.alert("Supabase", "Configure Supabase in your environment to publish splits.");
+        return;
+      }
+      const uid = session?.user?.id;
+      if (!uid) {
+        Alert.alert("Sign in", "Log in to publish a split to the marketplace.");
+        return;
+      }
+      const { data: prof, error: pe } = await supabase.from("profiles").select("is_private").eq("id", uid).maybeSingle();
+      if (pe) {
+        Alert.alert("Profile", pe.message);
+        return;
+      }
+      if (prof?.is_private !== false) {
+        Alert.alert(
+          "Public profile required",
+          "Turn off private mode on the Account tab, then publish again. The marketplace only lists splits from public profiles."
+        );
+        return;
+      }
+      setPublishingSplitId(sp.id);
+      try {
+        const r = await publishSplitToMarketplace(supabase, uid, sp, state.exercises);
+        if (!r.ok) {
+          Alert.alert("Could not publish", r.message);
+          return;
+        }
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert(
+          "Published",
+          "Your split is in Supabase. It appears on the marketplace when it ranks in the top 5 by likes or when your profile leads weekly likes (top 3 trending)."
+        );
+      } finally {
+        setPublishingSplitId(null);
+      }
+    },
+    [session?.user?.id, state.exercises]
+  );
 
   if (!ready) {
     return (
@@ -204,6 +253,24 @@ export default function LogWorkoutScreen() {
                 <Text style={styles.enterBtnText}>Continue this split</Text>
                 <Ionicons name="arrow-forward" size={18} color={colors.accent} />
               </TouchableOpacity>
+              {isSupabaseConfigured() && supabase ? (
+                <TouchableOpacity
+                  style={styles.publishBtn}
+                  onPress={() => void handlePublishSplit(sp)}
+                  disabled={publishingSplitId === sp.id}
+                  accessibilityRole="button"
+                  accessibilityLabel="Publish split to marketplace"
+                >
+                  {publishingSplitId === sp.id ? (
+                    <ActivityIndicator color={colors.accent} />
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload-outline" size={18} color={colors.accent} />
+                      <Text style={styles.publishBtnText}>Publish to marketplace</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              ) : null}
             </View>
           ))}
         </ScrollView>
@@ -530,6 +597,23 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     fontWeight: "600",
+  },
+  publishBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.surface,
+  },
+  publishBtnText: {
+    color: colors.accent,
+    fontSize: 15,
+    fontWeight: "700",
   },
   headerBlock: {
     marginBottom: 8,

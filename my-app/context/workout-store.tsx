@@ -1,7 +1,24 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Alert, AppState } from "react-native";
 
-import { generateId } from "@/lib/id";
+import { useAuth } from "@/context/auth-context";
+import {
+  fetchOwnWorkoutLogs,
+  flushWorkoutSyncQueue,
+  mergeRemoteSessionsIntoState,
+  syncWorkoutAfterSave,
+} from "@/lib/cloud-sync";
+import { generateId, generateWorkoutSessionId } from "@/lib/id";
+import { supabase } from "@/lib/supabase";
 import { getLocalDateString } from "@/lib/date";
 import { createDefaultState, loadPersistedState, savePersistedState } from "@/lib/persistence";
 import { applyStreakDecayToState } from "@/lib/streak-sync";
@@ -30,6 +47,8 @@ type WorkoutStoreValue = {
   dismissSaveBanner: () => void;
   showSaveBanner: boolean;
   deleteSession: (sessionId: string) => void;
+  /** Add imported exercises + a new split (marketplace download). */
+  importSplitBundle: (name: string, extraExercises: Exercise[], slotsInput: WorkoutSlot[]) => string | null;
 };
 
 const Ctx = createContext<WorkoutStoreValue | null>(null);
@@ -78,20 +97,45 @@ function buildInitialDraft(
 }
 
 export function WorkoutStoreProvider({ children }: { children: React.ReactNode }) {
+  const { session: authSession, loading: authLoading, authEnabled } = useAuth();
   const [state, setState] = useState<AppStateV1 | null>(null);
   const stateRef = useRef<AppStateV1 | null>(null);
   const [ready, setReady] = useState(false);
   const [showSaveBanner, setShowSaveBanner] = useState(false);
+  const prevSignedInUserIdRef = useRef<string | undefined>(undefined);
 
   stateRef.current = state;
 
+  /** Persist the previous account before in-memory state is replaced (per-user storage keys). */
+  useLayoutEffect(() => {
+    const uid = authSession?.user?.id;
+    const prev = prevSignedInUserIdRef.current;
+    if (typeof prev === "string" && prev !== uid && stateRef.current) {
+      void savePersistedState(stateRef.current, authEnabled, prev);
+    }
+    prevSignedInUserIdRef.current = typeof uid === "string" ? uid : undefined;
+  }, [authSession?.user?.id, authEnabled]);
+
   useEffect(() => {
+    if (authEnabled && authLoading) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
-        const loaded = await loadPersistedState();
+        const userId = authSession?.user?.id ?? null;
+        const loaded = await loadPersistedState(authEnabled, userId);
+        if (cancelled) return;
+        let next = loaded;
+        if (supabase && userId) {
+          await flushWorkoutSyncQueue(supabase);
+          const remote = await fetchOwnWorkoutLogs(supabase, userId);
+          if (!cancelled) {
+            next = applyStreakDecayToState(mergeRemoteSessionsIntoState(loaded, remote));
+          }
+        } else {
+          next = loaded;
+        }
         if (!cancelled) {
-          setState(loaded);
+          setState(next);
           setReady(true);
         }
       } catch {
@@ -105,7 +149,7 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authEnabled, authLoading, authSession?.user?.id]);
 
   useEffect(() => {
     if (!ready || !state) return;
@@ -113,7 +157,7 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
       const attempt = () => {
         const latest = stateRef.current;
         if (!latest) return Promise.resolve();
-        return savePersistedState(latest);
+        return savePersistedState(latest, authEnabled, authSession?.user?.id ?? null);
       };
       attempt()
         .catch(() => new Promise((r) => setTimeout(r, 250)).then(attempt))
@@ -126,12 +170,13 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
         });
     }, 450);
     return () => clearTimeout(t);
-  }, [state, ready]);
+  }, [state, ready, authEnabled, authSession?.user?.id]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (next) => {
       if (next === "active") {
         setState((prev) => (prev ? applyStreakDecayToState(prev) : prev));
+        if (supabase) void flushWorkoutSyncQueue(supabase);
       }
     });
     return () => sub.remove();
@@ -193,6 +238,29 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
       const id = generateId();
       setAndDecay((s) => ({
         ...s,
+        splits: [...s.splits, { id, name: trimmedName, slots: v.slots }],
+      }));
+      return id;
+    },
+    [setAndDecay]
+  );
+
+  const importSplitBundle = useCallback(
+    (name: string, extraExercises: Exercise[], slotsInput: WorkoutSlot[]) => {
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        Alert.alert("Invalid split", "Split name cannot be empty.");
+        return null;
+      }
+      const v = validateWorkoutSlots(slotsInput);
+      if (!v.ok) {
+        Alert.alert("Invalid split", v.message);
+        return null;
+      }
+      const id = generateId();
+      setAndDecay((s) => ({
+        ...s,
+        exercises: [...s.exercises, ...extraExercises],
         splits: [...s.splits, { id, name: trimmedName, slots: v.slots }],
       }));
       return id;
@@ -387,8 +455,8 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
 
     const now = new Date();
     const localDate = getLocalDateString(now);
-    const session: WorkoutSession = {
-      id: generateId(),
+    const workoutSession: WorkoutSession = {
+      id: generateWorkoutSessionId(),
       completedAt: now.toISOString(),
       localDate,
       splitId: split.id,
@@ -407,7 +475,7 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
 
     setAndDecay((s) => ({
       ...s,
-      sessions: [session, ...s.sessions],
+      sessions: [workoutSession, ...s.sessions],
       streak: streakUpdate.streak,
       lastWorkoutDate: streakUpdate.lastWorkoutDate,
       lastWeightByExerciseId: { ...s.lastWeightByExerciseId, ...lastByEx },
@@ -416,8 +484,9 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
     }));
 
     setShowSaveBanner(true);
+    void syncWorkoutAfterSave(supabase, authSession?.user?.id, workoutSession);
     return { ok: true };
-  }, [state, setAndDecay]);
+  }, [state, setAndDecay, authSession?.user?.id]);
 
   const dismissSaveBanner = useCallback(() => setShowSaveBanner(false), []);
 
@@ -442,6 +511,7 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
       addExercise,
       updateExerciseName,
       createSplit,
+      importSplitBundle,
       replaceSplitTemplate,
       updateSplitName,
       enterSplit,
@@ -463,6 +533,7 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
     addExercise,
     updateExerciseName,
     createSplit,
+    importSplitBundle,
     replaceSplitTemplate,
     updateSplitName,
     enterSplit,

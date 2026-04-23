@@ -4,7 +4,19 @@ import { Platform } from "react-native";
 import { applyStreakDecayToState } from "./streak-sync";
 import type { AppStateV1 } from "./types";
 
-const STORAGE_KEY = "workout_logger_state_v1";
+/** Legacy single-user key (pre–per-account storage). */
+export const LEGACY_WORKOUT_STORAGE_KEY = "workout_logger_state_v1";
+
+/**
+ * When Supabase auth is on, each signed-in user gets their own blob so accounts
+ * never share splits/sessions on one device. Not signed in → `…:guest`.
+ * Auth off → legacy key only (one local profile).
+ */
+export function getWorkoutStorageKey(authEnabled: boolean, userId: string | null): string {
+  if (!authEnabled) return LEGACY_WORKOUT_STORAGE_KEY;
+  if (userId) return `${LEGACY_WORKOUT_STORAGE_KEY}:u:${userId}`;
+  return `${LEGACY_WORKOUT_STORAGE_KEY}:guest`;
+}
 
 type KV = Pick<typeof legacyStorage, "getItem" | "setItem" | "removeItem">;
 
@@ -55,13 +67,13 @@ async function resolveStorage(): Promise<ResolvedStorage> {
     if (isWeb()) {
       try {
         const idb = getWebIndexedDbStorage();
-        await idb.getItem(STORAGE_KEY);
+        await idb.getItem(LEGACY_WORKOUT_STORAGE_KEY);
         return { primary: idb, webMigrationSource: legacyStorage };
       } catch {
         /* IndexedDB unavailable */
       }
       try {
-        await legacyStorage.getItem(STORAGE_KEY);
+        await legacyStorage.getItem(LEGACY_WORKOUT_STORAGE_KEY);
         return { primary: legacyStorage };
       } catch {
         if (!warnedInMemory) {
@@ -75,7 +87,7 @@ async function resolveStorage(): Promise<ResolvedStorage> {
     }
 
     try {
-      await legacyStorage.getItem(STORAGE_KEY);
+      await legacyStorage.getItem(LEGACY_WORKOUT_STORAGE_KEY);
       return { primary: legacyStorage };
     } catch {
       if (!warnedInMemory) {
@@ -105,18 +117,35 @@ function enqueueWrite(task: () => Promise<void>): Promise<void> {
   return next;
 }
 
-async function readRawWithMigration(): Promise<string | null> {
+async function readRawWithMigration(storageKey: string): Promise<string | null> {
   const { primary, webMigrationSource } = await resolveStorage();
 
-  let raw = await primary.getItem(STORAGE_KEY);
+  let raw = await primary.getItem(storageKey);
   if (raw) return raw;
+
+  // One-time: old installs used a single key — move into this signed-in user's slot once.
+  if (storageKey.startsWith(`${LEGACY_WORKOUT_STORAGE_KEY}:u:`)) {
+    const legacy = await primary.getItem(LEGACY_WORKOUT_STORAGE_KEY);
+    if (legacy) {
+      try {
+        await primary.setItem(storageKey, legacy);
+        await primary.removeItem(LEGACY_WORKOUT_STORAGE_KEY);
+      } catch {
+        /* still use legacy payload below */
+      }
+      return legacy;
+    }
+  }
 
   if (webMigrationSource) {
     try {
-      const fromLegacy = await webMigrationSource.getItem(STORAGE_KEY);
+      let fromLegacy = await webMigrationSource.getItem(storageKey);
+      if (!fromLegacy && storageKey.startsWith(`${LEGACY_WORKOUT_STORAGE_KEY}:u:`)) {
+        fromLegacy = await webMigrationSource.getItem(LEGACY_WORKOUT_STORAGE_KEY);
+      }
       if (!fromLegacy) return null;
       try {
-        await primary.setItem(STORAGE_KEY, fromLegacy);
+        await primary.setItem(storageKey, fromLegacy);
       } catch {
         /* still return migrated payload */
       }
@@ -129,18 +158,20 @@ async function readRawWithMigration(): Promise<string | null> {
   return null;
 }
 
-export async function clearAllData(): Promise<void> {
+/** Clears persisted state for the given auth scope (same key rules as load/save). */
+export async function clearAllData(authEnabled: boolean, userId: string | null): Promise<void> {
+  const storageKey = getWorkoutStorageKey(authEnabled, userId);
   await enqueueWrite(async () => {
-    mem.delete(STORAGE_KEY);
+    mem.delete(storageKey);
     const { primary, webMigrationSource } = await resolveStorage();
     try {
-      await primary.removeItem(STORAGE_KEY);
+      await primary.removeItem(storageKey);
     } catch {
       /* ignore */
     }
     if (webMigrationSource) {
       try {
-        await webMigrationSource.removeItem(STORAGE_KEY);
+        await webMigrationSource.removeItem(storageKey);
       } catch {
         /* ignore */
       }
@@ -148,16 +179,17 @@ export async function clearAllData(): Promise<void> {
   });
 }
 
-export async function debugStorageSize(): Promise<void> {
+export async function debugStorageSize(authEnabled: boolean, userId: string | null): Promise<void> {
   try {
     const { primary } = await resolveStorage();
-    const raw = await primary.getItem(STORAGE_KEY);
+    const key = getWorkoutStorageKey(authEnabled, userId);
+    const raw = await primary.getItem(key);
     if (!raw) {
-      console.log("No data stored");
+      console.log(`No data stored for ${key}`);
       return;
     }
     const sizeKB = raw.length / 1024;
-    console.log(`Stored data size: ~${sizeKB.toFixed(2)} KB`);
+    console.log(`Stored data size (${key}): ~${sizeKB.toFixed(2)} KB`);
   } catch (err) {
     console.error("Error checking storage size:", err);
   }
@@ -224,9 +256,10 @@ function repairActivePointers(state: AppStateV1): AppStateV1 {
   return { ...state, activeSplitId, activeWorkoutSlotIndex };
 }
 
-export async function loadPersistedState(): Promise<AppStateV1> {
+export async function loadPersistedState(authEnabled: boolean, userId: string | null): Promise<AppStateV1> {
   try {
-    const raw = await readRawWithMigration();
+    const storageKey = getWorkoutStorageKey(authEnabled, userId);
+    const raw = await readRawWithMigration(storageKey);
     if (!raw) return createDefaultState();
     const parsed = JSON.parse(raw) as unknown;
     const normalized = normalizeState(parsed);
@@ -239,33 +272,38 @@ export async function loadPersistedState(): Promise<AppStateV1> {
   }
 }
 
-async function trySave(json: string): Promise<void> {
+async function trySave(json: string, storageKey: string): Promise<void> {
   const { primary } = await resolveStorage();
 
   if (isWeb() && primary !== legacyStorage && primary !== memoryStorage) {
     try {
-      await primary.setItem(STORAGE_KEY, json);
+      await primary.setItem(storageKey, json);
       return;
     } catch (primaryErr) {
       console.warn("IndexedDB save failed, trying legacy localStorage:", primaryErr);
       try {
-        await legacyStorage.setItem(STORAGE_KEY, json);
+        await legacyStorage.setItem(storageKey, json);
         return;
       } catch {
-        await memoryStorage.setItem(STORAGE_KEY, json);
+        await memoryStorage.setItem(storageKey, json);
         return;
       }
     }
   }
 
-  await primary.setItem(STORAGE_KEY, json);
+  await primary.setItem(storageKey, json);
 }
 
-export async function savePersistedState(state: AppStateV1): Promise<void> {
+export async function savePersistedState(
+  state: AppStateV1,
+  authEnabled: boolean,
+  userId: string | null
+): Promise<void> {
+  const storageKey = getWorkoutStorageKey(authEnabled, userId);
   const json = JSON.stringify(state);
   return enqueueWrite(async () => {
     try {
-      await trySave(json);
+      await trySave(json, storageKey);
     } catch (error) {
       console.error("Failed to save state:", error);
       const msg = error instanceof Error ? error.message : String(error);
@@ -276,7 +314,7 @@ export async function savePersistedState(state: AppStateV1): Promise<void> {
             sessions: state.sessions.slice(0, Math.max(0, state.sessions.length - 100)),
           };
           const trimmedJson = JSON.stringify(trimmedState);
-          await trySave(trimmedJson);
+          await trySave(trimmedJson, storageKey);
           return;
         } catch (fallback) {
           console.error("Even trimmed state failed:", fallback);
