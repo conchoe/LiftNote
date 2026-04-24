@@ -20,6 +20,7 @@ import {
 import { generateId, generateWorkoutSessionId } from "@/lib/id";
 import { supabase } from "@/lib/supabase";
 import { getLocalDateString } from "@/lib/date";
+import { syncStarterCatalogIntoState } from "@/lib/exercise-library";
 import { createDefaultState, loadPersistedState, savePersistedState } from "@/lib/persistence";
 import { applyStreakDecayToState } from "@/lib/streak-sync";
 import { rebuildLastWeightsFromSessions, rebuildStreakFromSessions } from "@/lib/session-derive";
@@ -201,10 +202,12 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
       return null;
     }
     const id = generateId();
-    setAndDecay((s) => ({
-      ...s,
-      exercises: [...s.exercises, { id, name: trimmed }],
-    }));
+    setAndDecay((s) =>
+      syncStarterCatalogIntoState({
+        ...s,
+        exercises: [...s.exercises, { id, name: trimmed }],
+      })
+    );
     return id;
   }, [setAndDecay]);
 
@@ -215,10 +218,12 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
         Alert.alert("Invalid name", "Exercise name cannot be empty.");
         return;
       }
-      setAndDecay((s) => ({
-        ...s,
-        exercises: s.exercises.map((e) => (e.id === id ? { ...e, name: trimmed } : e)),
-      }));
+      setAndDecay((s) =>
+        syncStarterCatalogIntoState({
+          ...s,
+          exercises: s.exercises.map((e) => (e.id === id ? { ...e, name: trimmed } : e)),
+        })
+      );
     },
     [setAndDecay]
   );
@@ -258,11 +263,13 @@ export function WorkoutStoreProvider({ children }: { children: React.ReactNode }
         return null;
       }
       const id = generateId();
-      setAndDecay((s) => ({
-        ...s,
-        exercises: [...s.exercises, ...extraExercises],
-        splits: [...s.splits, { id, name: trimmedName, slots: v.slots }],
-      }));
+      setAndDecay((s) =>
+        syncStarterCatalogIntoState({
+          ...s,
+          exercises: [...s.exercises, ...extraExercises],
+          splits: [...s.splits, { id, name: trimmedName, slots: v.slots }],
+        })
+      );
       return id;
     },
     [setAndDecay]

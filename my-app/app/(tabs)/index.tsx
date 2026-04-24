@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,16 +14,24 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { PressableScale } from "@/components/PressableScale";
+
 import { CreateSplitModal } from "@/components/CreateSplitModal";
+import { ExerciseGroupList } from "@/components/ExerciseGroupList";
 import { useAuth } from "@/context/auth-context";
 import { EditSplitModal } from "@/components/EditSplitModal";
 import { ExerciseLogModal } from "@/components/ExerciseLogModal";
 import { WorkoutSavedBanner } from "@/components/WorkoutSavedBanner";
 import { useWorkoutStore } from "@/context/workout-store";
+import {
+  STARTER_CATALOG_SIZE,
+  countStarterExercises,
+  splitStarterAndCustom,
+} from "@/lib/exercise-library";
 import { publishSplitToMarketplace } from "@/lib/publish-split";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import type { Split } from "@/lib/types";
-import { colors } from "@/lib/theme";
+import type { Exercise, Split } from "@/lib/types";
+import { cardShadow, colors, theme } from "@/lib/theme";
 
 export default function LogWorkoutScreen() {
   const { session } = useAuth();
@@ -55,6 +64,7 @@ export default function LogWorkoutScreen() {
   const [logExerciseId, setLogExerciseId] = useState<string | null>(null);
   const [editSplitOpen, setEditSplitOpen] = useState(false);
   const [publishingSplitId, setPublishingSplitId] = useState<string | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(true);
 
   const activeSplit = useMemo(
     () => state.splits.find((s) => s.id === state.activeSplitId) ?? null,
@@ -111,6 +121,12 @@ export default function LogWorkoutScreen() {
     [session?.user?.id, state.exercises]
   );
 
+  const { starter: starterGroups, custom: customGroups } = useMemo(
+    () => splitStarterAndCustom(state.exercises),
+    [state.exercises]
+  );
+  const starterCount = useMemo(() => countStarterExercises(state.exercises), [state.exercises]);
+
   if (!ready) {
     return (
       <View style={styles.centered}>
@@ -125,73 +141,135 @@ export default function LogWorkoutScreen() {
     const result = saveWorkout();
     if (!result.ok) {
       Alert.alert("Cannot save workout", result.error);
+    } else {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
 
-  const renderLibrary = () => (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>Exercise library</Text>
-      <Text style={styles.cardSub}>Add movements you use across splits. Names can be renamed anytime.</Text>
-      <View style={styles.addRow}>
-        <TextInput
-          style={styles.input}
-          placeholder="New exercise name"
-          placeholderTextColor={colors.textMuted}
-          value={newExerciseName}
-          onChangeText={setNewExerciseName}
-        />
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={() => {
-            const id = addExercise(newExerciseName);
-            if (id) setNewExerciseName("");
-          }}
-        >
-          <Text style={styles.primaryBtnText}>Add</Text>
-        </TouchableOpacity>
-      </View>
-      {state.exercises.length === 0 ? (
-        <Text style={styles.muted}>No exercises yet. Add a few to build your split.</Text>
-      ) : (
-        state.exercises.map((e) => (
-          <View key={e.id} style={styles.libRow}>
-            {renameExerciseId === e.id ? (
-              <View style={styles.renameRow}>
-                <TextInput
-                  style={[styles.input, { flex: 1 }]}
-                  value={renameExerciseText}
-                  onChangeText={setRenameExerciseText}
-                  autoFocus
-                />
-                <TouchableOpacity
-                  style={styles.smallBtn}
-                  onPress={() => {
-                    updateExerciseName(e.id, renameExerciseText);
-                    setRenameExerciseId(null);
-                  }}
-                >
-                  <Text style={styles.smallBtnText}>Save</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.smallGhost} onPress={() => setRenameExerciseId(null)}>
-                  <Text style={styles.smallGhostText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.libName}>{e.name}</Text>
-                <TouchableOpacity onPress={() => {
-                  setRenameExerciseId(e.id);
-                  setRenameExerciseText(e.name);
-                }}>
-                  <Text style={styles.link}>Rename</Text>
-                </TouchableOpacity>
-              </>
-            )}
+  const renderLibrary = () => {
+    const n = state.exercises.length;
+    const customN = customGroups[0]?.items.length ?? 0;
+    const renderLibRow = (e: Exercise) => (
+      <View style={styles.libRow}>
+        {renameExerciseId === e.id ? (
+          <View style={styles.renameRow}>
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              value={renameExerciseText}
+              onChangeText={setRenameExerciseText}
+              autoFocus
+            />
+            <TouchableOpacity
+              style={styles.smallBtn}
+              onPress={() => {
+                updateExerciseName(e.id, renameExerciseText);
+                setRenameExerciseId(null);
+              }}
+            >
+              <Text style={styles.smallBtnText}>Save</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.smallGhost} onPress={() => setRenameExerciseId(null)}>
+              <Text style={styles.smallGhostText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
-        ))
-      )}
-    </View>
-  );
+        ) : (
+          <>
+            <Text style={styles.libName}>{e.name}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setRenameExerciseId(e.id);
+                setRenameExerciseText(e.name);
+              }}
+            >
+              <Text style={styles.link}>Rename</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+    );
+    return (
+      <View style={styles.card}>
+        <Pressable
+          onPress={() => setLibraryOpen((o) => !o)}
+          style={({ pressed }) => [styles.libHeaderRow, pressed && styles.libHeaderPressed]}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: libraryOpen }}
+        >
+          <View style={styles.libHeaderTextCol}>
+            <Text style={styles.cardTitle}>Exercise library</Text>
+            <Text style={styles.libHintOnHeader}>
+              {n} total · includes starter set ({starterCount || STARTER_CATALOG_SIZE} moves) ·{" "}
+              {libraryOpen ? "Tap to hide" : "Tap to show"}
+            </Text>
+          </View>
+          <Ionicons name={libraryOpen ? "chevron-up" : "chevron-down"} size={26} color={colors.textMuted} />
+        </Pressable>
+        <Text style={styles.cardSub}>
+          Browse the starter set by body part below, or add your own—custom moves appear in Added by you.
+        </Text>
+        <View style={styles.addRow}>
+          <TextInput
+            style={styles.input}
+            placeholder="New exercise name"
+            placeholderTextColor={colors.textMuted}
+            value={newExerciseName}
+            onChangeText={setNewExerciseName}
+          />
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => {
+              const id = addExercise(newExerciseName);
+              if (id) setNewExerciseName("");
+            }}
+          >
+            <Text style={styles.primaryBtnText}>Add</Text>
+          </TouchableOpacity>
+        </View>
+        {libraryOpen ? (
+          <View style={styles.libScrollBody}>
+            {starterGroups.length > 0 ? (
+              <View style={styles.libBlock}>
+                <View style={styles.starterPillRow}>
+                  <Ionicons name="library-outline" size={20} color={colors.accent} />
+                  <Text style={styles.starterPillText}>Starter set</Text>
+                  <Text style={styles.starterPillMeta}>
+                    {starterCount} move{starterCount === 1 ? "" : "s"} · by muscle group
+                  </Text>
+                </View>
+                <ExerciseGroupList
+                  groups={starterGroups}
+                  collapseSections={false}
+                  renderRow={renderLibRow}
+                />
+              </View>
+            ) : null}
+            {customGroups.length > 0 ? (
+              <View style={[styles.libBlock, styles.libBlockCustom]}>
+                <View style={styles.starterPillRow}>
+                  <Ionicons name="person-outline" size={20} color={colors.accentEmphasis} />
+                  <Text style={styles.starterPillText}>Added by you</Text>
+                  <Text style={styles.starterPillMeta}>
+                    {customN} custom move{customN === 1 ? "" : "s"}
+                  </Text>
+                </View>
+                <ExerciseGroupList
+                  groups={customGroups}
+                  collapseSections={false}
+                  renderRow={renderLibRow}
+                />
+              </View>
+            ) : null}
+            {starterGroups.length === 0 && customGroups.length === 0 ? (
+              <Text style={styles.muted}>
+                No exercises in your library yet. Use the field above to add one, or create a new profile to load the{" "}
+                {STARTER_CATALOG_SIZE}-move starter set.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+    );
+  };
 
   if (!state.activeSplitId) {
     return (
@@ -344,35 +422,56 @@ export default function LogWorkoutScreen() {
           </ScrollView>
         ) : (
           <View style={styles.slotScreen}>
-            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              contentContainerStyle={styles.scrollSlot}
+              keyboardShouldPersistTaps="handled"
+            >
               {splitHeader(
                 `${activeSlot?.workoutName ?? "Workout"} · Day ${state.activeWorkoutSlotIndex + 1}`
               )}
-              <TouchableOpacity style={styles.backDay} onPress={clearWorkoutSlotSelection}>
-                <Ionicons name="chevron-back" size={18} color={colors.accent} />
-                <Text style={styles.backDayText}>Change workout day</Text>
-              </TouchableOpacity>
               <Text style={styles.sectionLabel}>Exercises</Text>
+              <Text style={styles.sectionSub}>Tap a lift to log sets. Save when you are finished.</Text>
               <View style={styles.exerciseGrid}>
                 {activeSlot?.exerciseIds.map((exerciseId) => {
                   const ex = state.exercises.find((e) => e.id === exerciseId);
                   const rows = state.draftByExerciseId[exerciseId] ?? [];
                   const filled = rows.filter((r) => r.reps.trim() && r.weight.trim() && r.rpe.trim()).length;
                   return (
-                    <TouchableOpacity key={exerciseId} style={styles.exerciseBox} onPress={() => openLogModal(exerciseId)}>
+                    <PressableScale
+                      key={exerciseId}
+                      onPress={() => openLogModal(exerciseId)}
+                      style={styles.exerciseBox}
+                      accessibilityLabel={ex?.name ?? "Exercise"}
+                    >
                       <Text style={styles.exerciseBoxTitle}>{ex?.name ?? "Exercise"}</Text>
                       <Text style={styles.exerciseBoxMeta}>
                         {filled}/{rows.length} sets ready
                       </Text>
-                    </TouchableOpacity>
+                    </PressableScale>
                   );
                 })}
               </View>
-              <TouchableOpacity style={styles.saveWorkoutBtn} onPress={handleSaveWorkout}>
-                <Ionicons name="checkmark-done" size={22} color={colors.onAccent} />
-                <Text style={styles.saveWorkoutBtnText}>Save workout</Text>
-              </TouchableOpacity>
             </ScrollView>
+            <SafeAreaView style={styles.bottomBar} edges={["bottom"]}>
+              <View style={styles.bottomActionRow}>
+                <PressableScale
+                  onPress={clearWorkoutSlotSelection}
+                  style={styles.bottomSecondary}
+                  accessibilityLabel="Change workout day"
+                >
+                  <Ionicons name="calendar-outline" size={22} color={colors.accent} />
+                  <Text style={styles.bottomSecondaryText}>Change day</Text>
+                </PressableScale>
+                <PressableScale
+                  onPress={handleSaveWorkout}
+                  style={styles.bottomPrimary}
+                  accessibilityLabel="Save workout"
+                >
+                  <Ionicons name="checkmark-circle" size={24} color={colors.onAccent} />
+                  <Text style={styles.bottomPrimaryText}>Save workout</Text>
+                </PressableScale>
+              </View>
+            </SafeAreaView>
             <ExerciseLogModal
               visible={logExerciseId !== null}
               title={logExercise?.name ?? "Exercise"}
@@ -421,6 +520,16 @@ const styles = StyleSheet.create({
   scroll: {
     padding: 16,
     paddingBottom: 40,
+  },
+  scrollSlot: {
+    padding: 16,
+    paddingBottom: 16,
+  },
+  sectionSub: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 14,
   },
   screenTitle: {
     color: colors.text,
@@ -471,6 +580,26 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     lineHeight: 20,
   },
+  libHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: theme.minTouch,
+    marginBottom: 4,
+  },
+  libHeaderPressed: { opacity: 0.88 },
+  libHeaderTextCol: { flex: 1, paddingRight: 8 },
+  libHintOnHeader: {
+    color: colors.textMuted,
+    fontSize: 13,
+    marginTop: 4,
+  },
+  libScrollBody: { marginTop: 4, gap: 0 },
+  libBlock: { marginTop: 12, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border },
+  libBlockCustom: { marginTop: 8 },
+  starterPillRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 8 },
+  starterPillText: { color: colors.text, fontSize: 16, fontWeight: "800" },
+  starterPillMeta: { color: colors.textMuted, fontSize: 13, fontWeight: "500" },
   addRow: {
     flexDirection: "row",
     gap: 10,
@@ -689,17 +818,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontStyle: "italic",
   },
-  backDay: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginBottom: 16,
-  },
-  backDayText: {
-    color: colors.accent,
-    fontSize: 15,
-    fontWeight: "600",
-  },
   sectionLabel: {
     color: colors.text,
     fontSize: 16,
@@ -713,12 +831,11 @@ const styles = StyleSheet.create({
   },
   exerciseBox: {
     width: "48%",
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    minHeight: 96,
+    backgroundColor: colors.surface2,
+    borderRadius: theme.radii.lg,
+    padding: theme.space.md,
+    minHeight: 100,
+    ...cardShadow,
   },
   exerciseBoxTitle: {
     color: colors.text,
@@ -730,17 +847,46 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
   },
-  saveWorkoutBtn: {
-    marginTop: 20,
+  bottomBar: {
+    backgroundColor: colors.bg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  bottomActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.space.sm,
+    paddingHorizontal: theme.space.md,
+    paddingTop: theme.space.sm,
+    paddingBottom: theme.space.xs,
+  },
+  bottomSecondary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: theme.radii.md,
+    backgroundColor: colors.surface2,
+    minHeight: theme.minTouch,
+  },
+  bottomSecondaryText: {
+    color: colors.accent,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  bottomPrimary: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
     backgroundColor: colors.accent,
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: theme.radii.lg,
+    minHeight: 52,
   },
-  saveWorkoutBtnText: {
+  bottomPrimaryText: {
     color: colors.onAccent,
     fontSize: 17,
     fontWeight: "800",

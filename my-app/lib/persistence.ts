@@ -1,8 +1,10 @@
 import legacyStorage, { createAsyncStorage } from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
+import { createBaseExercises, mergeBaseLibraryIfNeeded, syncStarterCatalogIntoState } from "./exercise-library";
+import { generateId } from "./id";
 import { applyStreakDecayToState } from "./streak-sync";
-import type { AppStateV1 } from "./types";
+import type { AppStateV1, Exercise } from "./types";
 
 /** Legacy single-user key (pre–per-account storage). */
 export const LEGACY_WORKOUT_STORAGE_KEY = "workout_logger_state_v1";
@@ -198,7 +200,7 @@ export async function debugStorageSize(authEnabled: boolean, userId: string | nu
 export function createDefaultState(): AppStateV1 {
   return {
     version: 1,
-    exercises: [],
+    exercises: createBaseExercises(),
     splits: [],
     sessions: [],
     streak: 0,
@@ -216,7 +218,26 @@ function normalizeState(raw: unknown): AppStateV1 | null {
   if (o.version !== 1) return null;
   return {
     version: 1,
-    exercises: Array.isArray(o.exercises) ? (o.exercises as AppStateV1["exercises"]) : [],
+    exercises: Array.isArray(o.exercises) ? (o.exercises as unknown[]).map((raw): Exercise => {
+      if (!raw || typeof raw !== "object") {
+        return { id: generateId(), name: "Exercise" };
+      }
+      const e = raw as Record<string, unknown>;
+      const id = typeof e.id === "string" && e.id ? e.id : generateId();
+      const name = typeof e.name === "string" ? e.name : "Exercise";
+      const lk = e.libraryKey;
+      if (
+        lk === "legs" ||
+        lk === "chest" ||
+        lk === "back" ||
+        lk === "shoulders" ||
+        lk === "arms" ||
+        lk === "core"
+      ) {
+        return { id, name, libraryKey: lk };
+      }
+      return { id, name };
+    }) : [],
     splits: Array.isArray(o.splits) ? (o.splits as AppStateV1["splits"]) : [],
     sessions: Array.isArray(o.sessions) ? (o.sessions as AppStateV1["sessions"]) : [],
     streak: typeof o.streak === "number" ? o.streak : 0,
@@ -264,7 +285,9 @@ export async function loadPersistedState(authEnabled: boolean, userId: string | 
     const parsed = JSON.parse(raw) as unknown;
     const normalized = normalizeState(parsed);
     if (!normalized) return createDefaultState();
-    const repaired = repairActivePointers(normalized);
+    const merged = mergeBaseLibraryIfNeeded(normalized);
+    const withStarters = syncStarterCatalogIntoState(merged);
+    const repaired = repairActivePointers(withStarters);
     return applyStreakDecayToState(repaired);
   } catch (error) {
     console.error("Failed to load persisted state:", error);

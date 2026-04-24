@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { ExerciseLibraryPickerContent } from "@/components/ExerciseLibraryPickerContent";
 import { colors } from "@/lib/theme";
 import type { Exercise, WorkoutSlot } from "@/lib/types";
 
@@ -166,7 +167,7 @@ export function CreateSplitModal({
                   </View>
                   <TouchableOpacity style={styles.pickBtn} onPress={() => setPickerSlot(index)}>
                     <Ionicons name="barbell-outline" size={20} color={colors.accent} />
-                    <Text style={styles.pickBtnText}>Add exercises from library</Text>
+                    <Text style={styles.pickBtnText}>Add from starter + your library</Text>
                   </TouchableOpacity>
                 </>
               ) : (
@@ -202,25 +203,29 @@ export function CreateSplitModal({
           <View style={styles.pickerBackdrop}>
             <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerSlot(null)} />
             <View style={styles.pickerSheet}>
-              <Text style={styles.pickerTitle}>Tap to toggle</Text>
-              <ScrollView>
-                {exercises.length === 0 ? (
-                  <Text style={styles.emptyLib}>No exercises yet. Add one below the day cards.</Text>
-                ) : (
-                  exercises.map((e) => {
+              <Text style={styles.pickerTitle}>Add to this day</Text>
+              <Text style={styles.pickerSub}>
+                Pick from the built-in starter set first, or scroll to your custom adds at the bottom.
+              </Text>
+              <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                <ExerciseLibraryPickerContent
+                  exercises={exercises}
+                  renderRow={(e) => {
                     const on = pickerSlot !== null && slots[pickerSlot].exerciseIds.includes(e.id);
                     return (
                       <TouchableOpacity
-                        key={e.id}
                         style={[styles.pickerRow, on && styles.pickerRowOn]}
                         onPress={() => pickerSlot !== null && toggleExercise(pickerSlot, e.id)}
                       >
-                        <Text style={styles.pickerRowText}>{e.name}</Text>
+                        <Text style={styles.pickerRowText} numberOfLines={3}>
+                          {e.name}
+                        </Text>
                         {on ? <Ionicons name="checkmark-circle" size={22} color={colors.accent} /> : null}
                       </TouchableOpacity>
                     );
-                  })
-                )}
+                  }}
+                  emptyText="Add exercises with Quick add below the day cards, or open Log to load the starter set."
+                />
               </ScrollView>
               <TouchableOpacity style={styles.pickerDone} onPress={() => setPickerSlot(null)}>
                 <Text style={styles.pickerDoneText}>Done</Text>
@@ -323,12 +328,13 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     padding: 16,
-    maxHeight: "70%",
+    maxHeight: "78%",
     borderWidth: 1,
     borderColor: colors.border,
     zIndex: 2,
   },
-  pickerTitle: { color: colors.text, fontSize: 16, fontWeight: "700", marginBottom: 10 },
+  pickerTitle: { color: colors.text, fontSize: 16, fontWeight: "700", marginBottom: 4 },
+  pickerSub: { color: colors.textMuted, fontSize: 13, marginBottom: 10, lineHeight: 18 },
   pickerRow: {
     paddingVertical: 14,
     paddingHorizontal: 12,
@@ -349,5 +355,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   pickerDoneText: { color: colors.onAccent, fontWeight: "700", fontSize: 16 },
-  emptyLib: { color: colors.textMuted, paddingVertical: 12 },
 });

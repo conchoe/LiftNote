@@ -1,18 +1,29 @@
+import { useCallback } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 
-import { colors } from "@/lib/theme";
+import { PressableScale } from "@/components/PressableScale";
+import { cardShadow, theme } from "@/lib/theme";
 import type { DraftSet } from "@/lib/types";
+
+const c = theme.colors;
+
+function rowComplete(d: DraftSet): boolean {
+  return (
+    d.reps.trim().length > 0 && d.weight.trim().length > 0 && d.rpe.trim().length > 0
+  );
+}
 
 export function ExerciseLogModal({
   visible,
@@ -31,64 +42,105 @@ export function ExerciseLogModal({
   onAddSet: () => void;
   onRemoveSet: (index: number) => void;
 }) {
+  const handleField = useCallback(
+    (index: number, field: keyof DraftSet, value: string) => {
+      const was = rowComplete(sets[index] ?? { reps: "", weight: "", rpe: "" });
+      const next: DraftSet = { ...sets[index]!, [field]: value };
+      onChangeSet(index, field, value);
+      if (!was && rowComplete(next)) {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    },
+    [onChangeSet, sets]
+  );
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.backdrop}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <TouchableOpacity style={styles.touchOut} activeOpacity={1} onPress={onClose} />
+        <Pressable style={styles.backdropPress} onPress={onClose} accessibilityLabel="Close modal" />
         <View style={styles.sheet}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>{title}</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={12}>
-              <Ionicons name="close" size={26} color={colors.textMuted} />
-            </TouchableOpacity>
+            <Text style={styles.headerTitle} numberOfLines={2}>
+              {title}
+            </Text>
+            <PressableScale
+              onPress={onClose}
+              hitSlop={12}
+              style={styles.closeBtn}
+              accessibilityLabel="Close"
+            >
+              <Ionicons name="close" size={26} color={c.textMuted} />
+            </PressableScale>
           </View>
-          <Text style={styles.hint}>Sets · reps (min 1) · weight lbs (min 1) · RPE 1–10</Text>
+          <Text style={styles.hint}>
+            Reps, weight (lb), RPE 1–10 — row fills in as you go. Light haptic when a set is complete.
+          </Text>
           <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
             {sets.map((row, idx) => (
-              <View key={idx} style={styles.setRow}>
-                <Text style={styles.setLabel}>Set {idx + 1}</Text>
-                <View style={styles.inputs}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Reps"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    value={row.reps}
-                    onChangeText={(t) => onChangeSet(idx, "reps", t)}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Weight"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="decimal-pad"
-                    value={row.weight}
-                    onChangeText={(t) => onChangeSet(idx, "weight", t)}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="RPE"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    value={row.rpe}
-                    onChangeText={(t) => onChangeSet(idx, "rpe", t)}
-                  />
+              <View key={idx} style={styles.setCard}>
+                <View style={styles.setTop}>
+                  <Text style={styles.setIndex}>Set {idx + 1}</Text>
+                  {sets.length > 1 ? (
+                    <PressableScale
+                      onPress={() => onRemoveSet(idx)}
+                      style={styles.trash}
+                      hitSlop={8}
+                      accessibilityLabel={`Remove set ${idx + 1}`}
+                    >
+                      <Ionicons name="trash-outline" size={22} color={c.danger} />
+                    </PressableScale>
+                  ) : (
+                    <View style={{ width: 40 }} />
+                  )}
                 </View>
-                {sets.length > 1 ? (
-                  <TouchableOpacity onPress={() => onRemoveSet(idx)} style={styles.trash}>
-                    <Ionicons name="trash-outline" size={20} color={colors.danger} />
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.trashSpacer} />
-                )}
+                <View style={styles.fieldRow}>
+                  <View style={styles.fieldBlock}>
+                    <Text style={styles.fieldLabel}>Reps</Text>
+                    <TextInput
+                      style={styles.inputLg}
+                      placeholder="0"
+                      placeholderTextColor={c.textMuted}
+                      keyboardType="number-pad"
+                      value={row.reps}
+                      onChangeText={(t) => handleField(idx, "reps", t)}
+                    />
+                  </View>
+                  <View style={styles.fieldBlock}>
+                    <Text style={styles.fieldLabel}>Weight</Text>
+                    <TextInput
+                      style={styles.inputLg}
+                      placeholder="0"
+                      placeholderTextColor={c.textMuted}
+                      keyboardType="decimal-pad"
+                      value={row.weight}
+                      onChangeText={(t) => handleField(idx, "weight", t)}
+                    />
+                  </View>
+                  <View style={styles.fieldBlock}>
+                    <Text style={styles.fieldLabel}>RPE</Text>
+                    <TextInput
+                      style={styles.inputLg}
+                      placeholder="0"
+                      placeholderTextColor={c.textMuted}
+                      keyboardType="number-pad"
+                      value={row.rpe}
+                      onChangeText={(t) => handleField(idx, "rpe", t)}
+                    />
+                  </View>
+                </View>
               </View>
             ))}
-            <TouchableOpacity style={styles.addBtn} onPress={onAddSet}>
-              <Ionicons name="add-circle-outline" size={22} color={colors.accent} />
+            <PressableScale
+              onPress={onAddSet}
+              style={styles.addBtn}
+              accessibilityLabel="Add another set"
+            >
+              <Ionicons name="add-circle-outline" size={24} color={c.accent} />
               <Text style={styles.addBtnText}>Add set</Text>
-            </TouchableOpacity>
+            </PressableScale>
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -100,88 +152,108 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
-  touchOut: {
+  backdropPress: {
     flex: 1,
+    width: "100%",
   },
   sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 24,
-    maxHeight: "88%",
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: c.surface,
+    borderTopLeftRadius: theme.radii.xl,
+    borderTopRightRadius: theme.radii.xl,
+    paddingBottom: theme.space.xl,
+    maxHeight: "88%" as const,
+    ...cardShadow,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingHorizontal: theme.space.md,
+    paddingTop: theme.space.md,
+    paddingBottom: theme.space.xs,
   },
   headerTitle: {
-    color: colors.text,
-    fontSize: 18,
+    color: c.text,
+    fontSize: theme.type.title2,
     fontWeight: "700",
     flex: 1,
-    paddingRight: 12,
+    paddingRight: theme.space.sm,
+  },
+  closeBtn: {
+    padding: theme.space.xs,
   },
   hint: {
-    color: colors.textMuted,
-    fontSize: 13,
-    paddingHorizontal: 18,
-    marginBottom: 8,
+    color: c.textMuted,
+    fontSize: theme.type.caption,
+    paddingHorizontal: theme.space.md,
+    marginBottom: theme.space.sm,
+    lineHeight: 18,
   },
   scroll: {
-    paddingHorizontal: 18,
-    paddingBottom: 12,
+    paddingHorizontal: theme.space.md,
+    paddingBottom: theme.space.md,
+    gap: theme.space.sm,
   },
-  setRow: {
+  setCard: {
+    backgroundColor: c.surface2,
+    borderRadius: theme.radii.lg,
+    padding: theme.space.md,
+    marginBottom: theme.space.sm,
+    // Light separation without heavy border
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: c.borderHairline,
+  },
+  setTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
+    justifyContent: "space-between",
+    marginBottom: theme.space.sm,
   },
-  setLabel: {
-    width: 52,
-    color: colors.textMuted,
-    fontSize: 13,
+  setIndex: {
+    color: c.textSecondary,
+    fontSize: theme.type.caption,
     fontWeight: "600",
   },
-  inputs: {
-    flex: 1,
-    flexDirection: "row",
-    gap: 8,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: colors.surface2,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    color: colors.text,
-    paddingHorizontal: 10,
-    paddingVertical: Platform.OS === "ios" ? 12 : 8,
-    fontSize: 15,
-  },
   trash: {
-    padding: 6,
+    padding: theme.space.xs,
   },
-  trashSpacer: {
-    width: 32,
+  fieldRow: {
+    flexDirection: "row",
+    gap: theme.space.sm,
+  },
+  fieldBlock: {
+    flex: 1,
+  },
+  fieldLabel: {
+    color: c.textMuted,
+    fontSize: 11,
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  inputLg: {
+    backgroundColor: c.surfaceElevated,
+    borderRadius: theme.radii.md,
+    color: c.text,
+    fontSize: theme.type.setInput,
+    fontWeight: "600" as const,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    textAlign: "center" as const,
   },
   addBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingVertical: 10,
+    justifyContent: "center",
+    gap: theme.space.sm,
+    marginTop: theme.space.sm,
+    paddingVertical: 14,
+    minHeight: theme.minTouch,
   },
   addBtnText: {
-    color: colors.accent,
-    fontSize: 16,
+    color: c.accent,
+    fontSize: theme.type.subhead,
     fontWeight: "600",
   },
 });

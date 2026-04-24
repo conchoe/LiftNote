@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { PressableScale } from "@/components/PressableScale";
 import { useAuth } from "@/context/auth-context";
 import { useWorkoutStore } from "@/context/workout-store";
 import { errorMessageFromUnknown } from "@/lib/error";
@@ -22,7 +23,7 @@ import { parseMarketplaceSplitRows } from "@/lib/marketplace-rows";
 import { likeVelocityLast7Days, type LikeRow } from "@/lib/marketplace-trending";
 import type { MarketplaceSplit } from "@/lib/supabase-types";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import { colors } from "@/lib/theme";
+import { cardShadow, colors, theme } from "@/lib/theme";
 
 type OptimisticEntry = { liked: boolean; likes_count: number };
 
@@ -75,25 +76,33 @@ export default function MarketplaceScreen() {
     }
 
     const list = parseMarketplaceSplitRows(splitRows ?? []);
-    setCatalogSplits(list);
-
     const creatorIds = [...new Set(list.map((s) => s.creator_id).filter(Boolean))] as string[];
+    const nameById = new Map<string, string>();
     const pub = new Set<string>();
     if (creatorIds.length > 0) {
       const { data: profs, error: profErr } = await supabase
         .from("profiles")
-        .select("id, is_private")
+        .select("id, is_private, username")
         .in("id", creatorIds);
       if (profErr) {
         setError(profErr.message);
       } else {
         for (const row of profs ?? []) {
-          const p = row as { id?: string; is_private?: boolean };
+          const p = row as { id?: string; is_private?: boolean; username?: string };
+          if (typeof p.id === "string" && typeof p.username === "string") {
+            nameById.set(p.id, p.username);
+          }
           if (typeof p.id === "string" && p.is_private === false) pub.add(p.id);
         }
       }
     }
     setPublicCreatorIds(pub);
+    setCatalogSplits(
+      list.map((s) => ({
+        ...s,
+        creator_display_name: s.creator_id ? nameById.get(s.creator_id) ?? null : null,
+      }))
+    );
 
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
     const { data: likeRows } = await supabase
@@ -250,6 +259,12 @@ export default function MarketplaceScreen() {
     (split: MarketplaceSplit, compact?: boolean) => {
       const { liked, likes_count } = mergeDisplay(split, likedIds, optimistic);
       const vel = likeVelocityLast7Days(split.id, recentLikes);
+      const creator =
+        split.creator_display_name != null && split.creator_display_name !== ""
+          ? `@${split.creator_display_name}`
+          : split.creator_id
+            ? "Creator"
+            : "Catalog";
       return (
         <View style={[styles.card, compact && styles.cardCompact]}>
           <View style={styles.cardTop}>
@@ -257,35 +272,39 @@ export default function MarketplaceScreen() {
               <Text style={styles.cardTitle} numberOfLines={2}>
                 {split.name}
               </Text>
+              <Text style={styles.cardCreator} numberOfLines={1}>
+                {creator}
+              </Text>
               {split.description ? (
                 <Text style={styles.cardDesc} numberOfLines={compact ? 2 : 3}>
                   {split.description}
                 </Text>
               ) : null}
-              <Text style={styles.meta}>
-                {likes_count} likes{vel > 0 ? ` · ${vel} this week` : ""}
-              </Text>
+              <View style={styles.likePill}>
+                <Ionicons name="heart" size={16} color={colors.fire} />
+                <Text style={styles.likePillText}>{likes_count}</Text>
+                {vel > 0 ? <Text style={styles.metaSide}> · {vel} this week</Text> : null}
+              </View>
             </View>
             <View style={styles.cardActions}>
-              <TouchableOpacity
-                accessibilityRole="button"
+              <PressableScale
                 accessibilityLabel={liked ? "Unlike split" : "Like split"}
                 onPress={() => void onToggleLike(split)}
                 style={styles.iconBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={10}
               >
                 <Ionicons
                   name={liked ? "heart" : "heart-outline"}
-                  size={24}
+                  size={26}
                   color={liked ? colors.fire : colors.textMuted}
                 />
-              </TouchableOpacity>
+              </PressableScale>
             </View>
           </View>
-          <TouchableOpacity style={styles.downloadBtn} onPress={() => onDownload(split)} activeOpacity={0.85}>
-            <Ionicons name="download-outline" size={18} color={colors.onAccent} />
+          <PressableScale onPress={() => onDownload(split)} style={styles.downloadBtn}>
+            <Ionicons name="download-outline" size={20} color={colors.onAccent} />
             <Text style={styles.downloadBtnText}>Download to my Trainer</Text>
-          </TouchableOpacity>
+          </PressableScale>
         </View>
       );
     },
@@ -470,12 +489,11 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
+    backgroundColor: colors.surface2,
+    borderRadius: theme.radii.lg,
+    padding: theme.space.md,
     marginBottom: 12,
+    ...cardShadow,
   },
   cardCompact: {
     width: 280,
@@ -492,9 +510,32 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   cardTitle: {
-    fontSize: 17,
-    fontWeight: "600",
+    fontSize: 18,
+    fontWeight: "800",
     color: colors.text,
+  },
+  cardCreator: {
+    marginTop: 4,
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.accent,
+  },
+  likePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginTop: 10,
+    gap: 4,
+  },
+  likePillText: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  metaSide: {
+    fontSize: 14,
+    color: colors.textMuted,
+    fontWeight: "500",
   },
   cardDesc: {
     marginTop: 6,
@@ -502,20 +543,19 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 20,
   },
-  meta: {
-    marginTop: 10,
-    fontSize: 12,
-    color: colors.textMuted,
-  },
   cardActions: {
     flexDirection: "row",
     alignItems: "center",
   },
   iconBtn: {
-    padding: 4,
+    minWidth: theme.minTouch,
+    minHeight: theme.minTouch,
+    alignItems: "center",
+    justifyContent: "center",
   },
   downloadBtn: {
     marginTop: 14,
+    minHeight: theme.minTouch,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

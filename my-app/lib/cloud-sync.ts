@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { syncStarterCatalogIntoState } from "@/lib/exercise-library";
 import { enqueueWorkoutSync, loadSyncQueue, removeFromSyncQueue } from "@/lib/sync-queue";
 import type { AppStateV1, WorkoutSession } from "@/lib/types";
 
@@ -32,7 +33,7 @@ export function mergeRemoteSessionsIntoState(state: AppStateV1, remote: WorkoutS
     (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
   );
 
-  return { ...state, exercises, sessions: mergedSessions };
+  return syncStarterCatalogIntoState({ ...state, exercises, sessions: mergedSessions });
 }
 
 export async function pushWorkoutLog(

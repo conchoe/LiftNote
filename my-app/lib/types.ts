@@ -1,6 +1,11 @@
+/** Subgroups for the default catalog; custom exercises omit this. */
+export type ExerciseLibraryKey = "legs" | "chest" | "back" | "shoulders" | "arms" | "core";
+
 export type Exercise = {
   id: string;
   name: string;
+  /** Set for bundled starter moves; custom adds from the app leave this unset. */
+  libraryKey?: ExerciseLibraryKey;
 };
 
 export type WorkoutSlot = {

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { DarkTheme, ThemeProvider } from "@react-navigation/native";
+import { ThemeProvider } from "@react-navigation/native";
 import { Stack, useRootNavigationState, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -8,7 +8,7 @@ import "react-native-reanimated";
 
 import { AuthProvider, useAuth } from "@/context/auth-context";
 import { WorkoutStoreProvider } from "@/context/workout-store";
-import { colors } from "@/lib/theme";
+import { colors, navigationTheme } from "@/lib/theme";
 
 export const unstable_settings = {
   anchor: "(tabs)",
@@ -41,7 +41,7 @@ function RootNavigation() {
   }
 
   return (
-    <ThemeProvider value={DarkTheme}>
+    <ThemeProvider value={navigationTheme}>
       <Stack
         screenOptions={{
           headerShown: false,

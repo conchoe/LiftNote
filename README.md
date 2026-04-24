@@ -1,49 +1,52 @@
-# Homework9
+LiftNote
 
-1. Overview
+LiftNote is a high-performance, native mobile workout tracker built for athletes who want to design, log, and share their training evolution. Moving beyond simple local logging, LiftNote features a global Split Marketplace where users can discover trending routines, like their friends' progress, and synchronize their data across devices in real-time.
 
-This app is a mobile workout tracker designed to bridge the gap between high-level "workout splits" and granular set-by-set logging. I chose this idea because traditional fitness apps often make it difficult to switch between different programming styles (like PPL vs. Upper/Lower) while maintaining a strict history of personal records. This app puts the "Split" at the center of the user experience.
+Features
+Cloud-Native Architecture: Real-time data synchronization across devices via Supabase.
 
-2. Screen Descriptions
+The Split Marketplace: A community hub to browse, like, and "Import" training routines designed by other users.
 
-The "Train" Tab (Logging Screen): * This is the primary workspace. If no split is active, it prompts the user to create one.
+One-Handed UI/UX: Designed for the gym floor. All primary logging actions are situated in the "Thumb Zone" for easy access during intense sessions.
 
-    Once a split is active (e.g., "Push Day"), it displays the predefined exercises.
+Optimistic Interactions: Immediate visual feedback for "Likes" and "Set Logs" using optimistic UI updates and Expo-Haptics.
 
-    Users can click an exercise to open a dynamic logging area where they can add rows for sets, reps, weight, and RPE.
+Progressive Analytics: Automated volume calculation and Personal Record (PR) tracking to visualize growth over time.
 
-The "Progress" Tab (History & Analytics):
+ Technical Stack
+Framework: React Native (Expo SDK 54)
 
-    Displays the user's current workout streak at the top using a "Duolingo-style" fire icon.
+Backend: Supabase (PostgreSQL + Auth)
 
-    Includes a searchable history of every exercise saved to the device.
+Icons: Lucide-react-native
 
-    Provides a visual frequency graph showing how many times the user has hit the gym recently.
+Navigation: React Navigation (Bottom Tabs + Stack)
 
-The "Split Architect" (Modal/Screen):
+Feedback: Expo-Haptics
 
-    A 7-day planning interface where users can name their split and assign specific workouts (or "Rest") to each day.
+ How to Run Locally
+To run LiftNote on your own device, follow these steps:
 
-3. How to Setup and Run
-To run this app on your own device or simulator, follow these steps:
+1. Prerequisites
+Install Node.js (v18+)
 
-    Clone the repository:
+Install the Expo Go app on your iOS or Android device.
 
-        git clone [YOUR_GITHUB_URL_HERE]
-        cd [YOUR_REPO_NAME]
+2. Setup
+Bash
+# Clone the repository
+git clone [YOUR_REPO_URL]
+cd liftnote
 
-    Install Dependencies:
+# Install dependencies
+npm install
+3. Environment Variables
+Create a .env file in the root directory and add your Supabase credentials:
 
-        npm install
-        npx expo install @react-native-async-storage/async-storage
-    
-    Start the App:
-
-        npx expo start
-
-    Open on Device:
-
-        Android: Scan the QR code using the Expo Go app.
-
-        iOS: Scan the QR code with your Camera app (ensure you have Expo Go installed).
-
+Plaintext
+EXPO_PUBLIC_SUPABASE_URL=your_project_url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+4. Start the Engine
+Bash
+npx expo start --tunnel
+Scan the QR code appearing in your terminal using your phone's camera (iOS) or the Expo Go app (Android).

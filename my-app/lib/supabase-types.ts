@@ -13,6 +13,8 @@ export type Profile = {
 export type MarketplaceSplit = {
   id: string;
   creator_id: string | null;
+  /** Filled in the client from `profiles.username` for display */
+  creator_display_name?: string | null;
   name: string;
   description: string | null;
   structure_json: unknown;

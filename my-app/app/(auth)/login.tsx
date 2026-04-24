@@ -33,8 +33,8 @@ export default function LoginScreen() {
       Alert.alert("Missing fields", "Enter email and password.");
       return;
     }
-    if (password.length < 6) {
-      Alert.alert("Password too short", "Use at least 6 characters.");
+    if (password.length < 3) {
+      Alert.alert("Password too short", "Use at least 3 characters.");
       return;
     }
 
